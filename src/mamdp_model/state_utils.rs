@@ -240,6 +240,7 @@ pub fn transition_to_per_action_comb(
     n: usize, 
     m: usize
 ) -> Vec<(Vec<i32>, f64)> {
+
     // for each agent follow the instructions of the action,, which may include a task
     // allocation
     let mut sprimes: Vec<Vec<i32>> = vec![Vec::new(); n];
@@ -270,26 +271,30 @@ pub fn transition_to_per_action_comb(
     // construct a new state from the transition
     let mut transition_to_pairs: Vec<(Vec<i32>, f64)> = Vec::new();
     for (sprimes, p, _words) in product_transitions.iter() {
-        let mut new_state: Vec<i32> = vec![-1; 2* n + m];
+        let mut new_state: Vec<i32> = state.to_vec();
         for (agent, s, task, word) in sprimes.iter() {
             new_state[*agent] = *s;
             if *task > -1 {
-                let qprime = tasks.tasks[*task as usize]
+                let qprime = match tasks.tasks[*task as usize]
                     .transitions
                     .get(&(state[n + *task as usize], word.to_string()))
-                    .unwrap();
-            } else {
-                
-            }
-            new_state[n + *task as usize] = *qprime;
-            // check if qprime is a member of the tasks done or failed states,
-            // if so then the agent will no longer work on this task
-            if tasks.tasks[*task as usize].done.contains(qprime) || 
-                tasks.tasks[*task as usize].rejecting.contains(qprime) {
-                    new_state[n + m + *agent] = -1;
+                    {
+                        Some(z) => { z }
+                        None => { 
+                            panic!("state: {:?}, word: {:?} combination for DFA not found!", 
+                                state[n + *task as usize], word)
+                            }
+                    };
+                new_state[n + *task as usize] = *qprime;
+                // check if qprime is a member of the tasks done or failed states,
+                // if so then the agent will no longer work on this task
+                if tasks.tasks[*task as usize].done.contains(qprime) || 
+                    tasks.tasks[*task as usize].rejecting.contains(qprime) {
+                        new_state[n + m + *agent] = -1;
+                    }
+                else {
+                    new_state[n + m + *agent] = *task
                 }
-            else {
-                new_state[n + m + *agent] = *task
             }
         }
         transition_to_pairs.push((new_state, *p));

@@ -1,15 +1,20 @@
 [package]
-name = "mamdp"
+name = "motap"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "rust_mamdp"
+name = "rust_motap"
 crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.16.5", features = ["extension-module", "hashbrown"] }
 hashbrown = "0.12"
 itertools = "0.10.3"
+rand = "0.8.4"
+blis-src = { version = "0.2", features = ["cblas", "static"] }
+cblas-sys = "0.1.4"
+float_eq = "1.0.0"
+gurobi = "0.3.4"
 
