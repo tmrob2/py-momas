@@ -84,7 +84,8 @@ pub fn get_available_actions(
     agents: &Team, 
     mission: &Mission, 
     n: usize, 
-    m: usize
+    m: usize,
+    tasks: Vec<i32>
 ) -> Vec<Vec<MultiAgentAction>> {
     // If the agent is not working, then determine which tasks are still remaining
     let mut available_actions: Vec<Vec<MultiAgentAction>> = Vec::new();
@@ -93,7 +94,7 @@ pub fn get_available_actions(
         // If an agent is working then no task allocation can occur, otherwise a task allocation     
         if state[n + m + agent] == -1 {
             // get the available tasks
-            let tasks = tasks_remaining(&state[..], n, m, mission);
+            
             // what about the case where there are no tasks reamining?
             // then we can do a task allocation=
             if tasks.is_empty() {
@@ -132,7 +133,10 @@ pub fn get_available_actions(
     available_actions
 }
 
-fn accumulate_actions(acc: Vec<Vec<MultiAgentAction>>, new_agent_actions: &[MultiAgentAction]) 
+fn accumulate_actions(
+    acc: Vec<Vec<MultiAgentAction>>, 
+    new_agent_actions: &[MultiAgentAction]
+) 
     -> Vec<Vec<MultiAgentAction>> {
     let mut new_acc: Vec<Vec<MultiAgentAction>> = Vec::new();
     if acc.is_empty() {
@@ -144,10 +148,24 @@ fn accumulate_actions(acc: Vec<Vec<MultiAgentAction>>, new_agent_actions: &[Mult
             for action in new_agent_actions.iter() {
                 // The agents must be working on different tasks, this is one of the 
                 // conditions of the emulating the SCPM
-                if !action_combo.iter().any(|a| a.task_job == action.task_job) {
+                if !action_combo.iter().any(|a| (a.task_job == action.task_job) && (a.task_job != -1)) {
                     let mut new_combo = action_combo.to_vec();
                     new_combo.push(*action);
                     new_acc.push(new_combo);
+                } else {
+                    let mut new_combo1 = action_combo.to_vec();
+                    // get the position of the combo which equals the current value
+                    for (k, x) in new_combo1.iter_mut()
+                        .enumerate().filter(|(k, x)| x.task_job == action.task_job) {
+                        x.task_job = -1;
+                    }
+                    new_combo1.push(*action);
+                    new_acc.push(new_combo1);
+                    let mut new_combo2 = action_combo.to_vec();
+                    let mut new_action = action.clone();
+                    new_action.task_job = -1;
+                    new_combo2.push(new_action);
+                    new_acc.push(new_combo2);
                 }
             }
         }
@@ -155,7 +173,10 @@ fn accumulate_actions(acc: Vec<Vec<MultiAgentAction>>, new_agent_actions: &[Mult
     new_acc
 }
 
-fn compute_action_product(actions_per_agent: Vec<Vec<MultiAgentAction>>, n: usize) 
+fn compute_action_product(
+    actions_per_agent: Vec<Vec<MultiAgentAction>>, 
+    n: usize
+) 
     -> Vec<Vec<MultiAgentAction>>  {
     let mut acc: Vec<Vec<MultiAgentAction>> = Vec::new();
     for agent_idx in 0..n {
@@ -179,10 +200,14 @@ pub fn compute_input_actions(
     n: usize, 
     m: usize
 ) -> Vec<Vec<MultiAgentAction>> {
-    let action_sets = get_available_actions(state, team, tasks, n, m);
+    let remaining = tasks_remaining(&state[..], n, m, tasks);
+    let action_sets = get_available_actions(state, team, tasks, n, m, remaining);
     let action_products = compute_action_product(action_sets, n);
     action_products
 }
+
+// TODO create a new function for when there are more agents not working than tasks 
+// remaining
 
 /// Computes the mamdp product transitions for a team of agents and a set of asynchronous actions given some input state
 fn product_transition(

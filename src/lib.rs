@@ -7,6 +7,7 @@ pub mod mamdp_model;
 pub mod mdp;
 pub mod c_binding;
 pub mod utils;
+pub mod stapu_model;
 use dfa::dfa::*;
 use agent::agent::*;
 use mamdp_model::{state_utils::*, model::*, test::*};
@@ -19,6 +20,7 @@ extern crate cblas_sys;
 use cblas_sys::{cblas_dcopy, cblas_dgemv, cblas_dscal, cblas_ddot};
 use std::mem;
 use float_eq::float_eq;
+use stapu_model::state_utils::*;
 
 
 pub fn reverse_key_value_pairs<T, U>(map: &HashMap<T, U>) -> HashMap<U, T> 
@@ -28,6 +30,10 @@ where T: Clone + Hash, U: Clone + Hash + Eq {
         acc
     })
 }
+
+// --------------------------------------------------------------------------------
+//                                LinAlg lib bindings 
+// --------------------------------------------------------------------------------
 
 pub struct COO {
     pub nzmax: i32,
@@ -254,20 +260,41 @@ pub fn val_or_zero_one(val: &f64) -> f64 {
 
 /// Function to wrap and export the module to Python
 #[pymodule]
-pub fn rust_motap(_py: Python, module: &PyModule) -> PyResult<()> {
+pub fn rust_motap(py: Python, module: &PyModule) -> PyResult<()> {
     //module.add_function(wrap_pyfunction!(do_something_with_dfa, module)?)?;
     //module.add_function(wrap_pyfunction!(find_neighbour_states, module)?)?;
-    module.add_function(wrap_pyfunction!(construct_initial_state, module)?)?;
-    module.add_function(wrap_pyfunction!(test_get_all_transitions, module)?)?;
-    module.add_function(wrap_pyfunction!(build_model, module)?)?;
-    module.add_function(wrap_pyfunction!(assert_done, module)?)?;
-    module.add_function(wrap_pyfunction!(convert_to_multobj_mdp, module)?)?;
     module.add_function(wrap_pyfunction!(multiobjective_scheduler_synthesis, module)?)?;
+    module.add_class::<MultiObjectiveMDP>()?;
     module.add_class::<Agent>()?;
     module.add_class::<DFA>()?;
     module.add_class::<Mission>()?;
     module.add_class::<Team>()?;
-    module.add_class::<MAMDP>()?;
-    module.add_class::<MultiObjectiveMDP>()?;
+    mamdp(py, module)?;
+    stapu(py, module)?;
     Ok(())
 }
+
+fn mamdp(py: Python, rust_motap: &PyModule) -> PyResult<()> {
+    let child_module = PyModule::new(py, "mamdp")?;
+    child_module.add_function(wrap_pyfunction!(mamdp_model::state_utils::construct_initial_state, child_module)?)?;
+    child_module.add_function(wrap_pyfunction!(test_get_all_transitions, child_module)?)?;
+    child_module.add_function(wrap_pyfunction!(build_model, child_module)?)?;
+    child_module.add_function(wrap_pyfunction!(assert_done, child_module)?)?;
+    child_module.add_function(wrap_pyfunction!(convert_to_multobj_mdp, child_module)?)?;
+    child_module.add_class::<MAMDP>()?;
+    rust_motap.add_submodule(child_module)?;
+    Ok(())
+} 
+
+fn stapu(py: Python, rust_motap: &PyModule) -> PyResult<()> {
+    let child_module = PyModule::new(py, "stapu")?;
+    child_module.add_function(wrap_pyfunction!(stapu_model::state_utils::construct_initial_state, child_module)?)?;
+    child_module.add_function(wrap_pyfunction!(stapu_model::state_utils::get_available_actions, child_module)?)?;
+    child_module.add_function(wrap_pyfunction!(stapu_model::state_utils::transitions, child_module)?)?;
+    child_module.add_function(wrap_pyfunction!(stapu_model::model::build_model, child_module)?)?;
+    child_module.add_function(wrap_pyfunction!(stapu_model::model::convert_to_multobj_mdp, child_module)?)?;
+    child_module.add_class::<TeamState>()?;
+    rust_motap.add_submodule(child_module)?;
+    Ok(())
+}
+

@@ -99,17 +99,55 @@ impl MultiObjectiveMDP {
     pub fn get_transition_matrices(&self) -> &HashMap<i32, COO> {
         &self.transition_matrices
     }
+
+    pub fn insert_available_action(&mut self, state: i32, action: i32) {
+        match self.available_actions.get_mut(&state) {
+            Some(x) => { x.push(action); }
+            None => { self.available_actions.insert(state, vec![action]); }
+        }
+    }
 }
 
 #[pymethods]
 impl MultiObjectiveMDP {
+
+    pub fn print_model_size(&self) {
+        println!("|S|: {}, |P|: {}", self.states.len(), self.transitions.len())
+    }
+
     pub fn print_states(&self) {
         println!("{:?}", self.states);
     }
 
     pub fn print_transitions(&self) {
-        for t in self.transitions.iter() {
-            println!("{:?}", t);
+        for state in self.states.iter() {
+            for action in self.actions.iter() {
+                match self.transitions.get(&(*state, *action)) {
+                    Some(t) => { 
+                        println!("{}, {} => {:?}", state, action , t);
+                    }
+                    None => { }
+                }
+            }
+        }
+    }
+
+    pub fn print_rewards(&self) {
+        for state in self.states.iter() {
+            for action in self.actions.iter() {
+                match self.rewards.get(&(*state, *action)) {
+                    Some(r) => {
+                        println!("{}, {} =>  {:?}", state, action, r);
+                    }
+                    None => {}
+                }
+            }
+        }
+    }
+
+    pub fn print_available_actions(&self) {
+        for state in self.states.iter() {
+            println!("state: {:?} => {:?}", state, self.available_actions.get(state).unwrap());
         }
     }
 }

@@ -127,6 +127,7 @@ pub fn multiobjective_scheduler_synthesis(
             }
         }
     }
+    println!("Ran in t(s): {:?}", t1.elapsed().as_secs_f64());
     (schedulers, hullset)
 }
 
@@ -166,12 +167,15 @@ fn value_iteration(
 
     rand_proper_policy(&mut pi[..], model);
     let argmaxPinit = construct_argmaxPmatrix(&pi[..], model);
-    let Rinit = construct_argmaxRagents(&pi[..], model, ns);
+    let Rinit = construct_argmaxRagents(&pi[..], model, n);
     // multiply the agent components of w with Rinit (dot)
     let mut rmv = vec![0f64; ns];
+    let w_init = vec![1. / n as f64; n];
+    // TODO: this computation will be different when we go to the single agent models?
+    // need to check that we can still take the product of R.w??
     blas_matrix_vector_mulf64(
         &Rinit.m, 
-        &w[..n], 
+        &w_init, 
         Rinit.nr as i32, 
         Rinit.nc as i32, 
         &mut rmv[..]
@@ -186,7 +190,7 @@ fn value_iteration(
 
     while !policy_stable {
         policy_stable = true;
-        for (ii, a) in model.actions.iter().enumerate() {
+        for a in model.actions.iter() {
             // Instantiate a new matrix
             let S = model.get_transition_matrices().get(a).unwrap();
             let P = sparse_to_cs(S);
@@ -206,7 +210,7 @@ fn value_iteration(
             assert_eq!(vmv.len(), rmv.len());
             // Perform the operation R.w + P.v
             add_vecs(&rmv[..], &mut vmv[..], ns as i32, 1.0);
-            update_qmat(&mut q[..], &vmv[..], ii, model.actions.len()).unwrap();
+            update_qmat(&mut q[..], &vmv[..], *a as usize, model.actions.len()).unwrap();
         }
         max_values(
             &mut xnew[..], 
@@ -223,6 +227,8 @@ fn value_iteration(
         // update the value vector
         copy(&xtemp[..], &mut x[..], ns as i32);
     }
+    spfree(argmaxPinit.m);
+    drop(Rinit);
     // Now that the policy has been computed, we need to determine the multi-objective
     // outcome of these policy choices
     let argmaxP = construct_argmaxPmatrix(&pi[..], model);
@@ -272,6 +278,7 @@ fn value_iteration(
     for k in 0..n + m {
         r.push(X[k * ns + model.initial_state as usize]);
     }
+    spfree(argmaxP.m);
     (pi, r)
 }
 
@@ -279,7 +286,6 @@ fn rand_proper_policy(
     pi: &mut [f64], 
     model: &MultiObjectiveMDP,
 ) {
-    // TODO: problem to solve, because some states are unreachable sometimes there
     // will not be an action to select
     for s in model.states.iter() {
         // get the random states
@@ -290,7 +296,8 @@ fn rand_proper_policy(
                 pi[*s as usize] = *act as f64;
             }
             None => { 
-                pi[*s as usize] = -1.;
+                panic!("No available actions in state {}", s);
+                //pi[*s as usize] = -1.;
             }   
         };
     }
@@ -308,14 +315,19 @@ fn construct_argmaxPmatrix(
     let mut vals: Vec<f64> = Vec::new();
 
     for state in model.states.iter() {
-        let v = model.transitions
-            .get(&(*state, pi[*state as usize] as i32))
-            .unwrap();
-        for (s, p) in v.iter() {
-            ii.push(*state);
-            jj.push(*s);
-            vals.push(*p);
+        match model.transitions.get(&(*state, pi[*state as usize] as i32)) {
+            Some(v) => {
+                for (s, p) in v.iter() {
+                    ii.push(*state);
+                    jj.push(*s);
+                    vals.push(*p);
+                }
+            }
+            None => {
+                panic!("Could not find transition for ({}, {})", state, pi[*state as usize] as i32);
+            }
         }
+        
     }
 
     let T = create_sparse_matrix(
@@ -352,7 +364,7 @@ fn construct_argmaxRmatrix(
     m: usize
 ) -> MatrixAttr {
     let size: usize = model.states.len();
-    let mut R: Vec<f64> = vec![0.; size * n];
+    let mut R: Vec<f64> = vec![0.; size * (n + m)];
     for state in model.states.iter() {
         let r = model.get_reward_matricies()
             .get(&(pi[*state as usize] as i32)).unwrap();

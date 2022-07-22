@@ -57,15 +57,14 @@ impl Agent {
 #[pyclass]
 pub struct Team {
     pub agents: Vec<Agent>,
-    pub size: usize,
-    pub transitions: HashMap<(Vec<i32>, Vec<i32>), Vec<(Vec<i32>, f64, Vec<String>)>>
+    pub size: usize
 }
 
 #[pymethods]
 impl Team {
     #[new]
     fn new() -> PyResult<Self> {
-        Ok(Team { agents: Vec::new(), size: 0, transitions: HashMap::new()})
+        Ok(Team { agents: Vec::new(), size: 0})
     }
 
     fn add_agent(&mut self, agent: Agent) {

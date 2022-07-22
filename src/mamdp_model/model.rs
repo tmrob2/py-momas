@@ -18,6 +18,7 @@ use crate::reverse_key_value_pairs;
 #[pyclass]
 pub struct MAMDP {
     pub initial_state: Vec<i32>,
+    #[pyo3(get)]
     pub states: Vec<Vec<i32>>,
     // Available actions for a particular state is much more useful then all of the action as a set
     pub actions: HashMap<Vec<i32>, Vec<Vec<MultiAgentAction>>>,
@@ -28,10 +29,6 @@ pub struct MAMDP {
     action_map: HashMap<i32, Vec<MultiAgentAction>>,
     reverse_action_map: HashMap<Vec<MultiAgentAction>, i32>,
 }
-
-// TODO: rewards structure for the MAMDP
-// TODO: arbitrary model conversion -> We essentially want some generic multi-agent
-//  MDP which we can conduct model checking on with our current algorithms.
 
 impl MAMDP {
     fn new() -> Self {
@@ -85,7 +82,11 @@ impl MAMDP {
             let agent_reward = team.agents[i].rewards
                 .get(&(state[i], action[i].base_action))
                 .unwrap();
-            new_reward[i] = *agent_reward
+            if state[n + m + i] == -1 {
+                new_reward[i] = 0.
+            } else {
+                new_reward[i] = *agent_reward
+            }
         }
 
         for j in 0..m {
@@ -144,14 +145,27 @@ impl MAMDP {
     }
 
     pub fn print_transitions(&self) {
-        for t in self.transitions.iter() {
-            println!("{:?}", t);
+        for state in self.states.iter() {
+            // get the state transition
+            let state_idx = self.state_mapping.get(&state.to_vec()).unwrap();
+            for action in self.actions.get(&state.to_vec()).unwrap().iter() {
+                let v = self.transitions.get(&(state.to_vec(), action.to_vec())).unwrap();
+                let vprint = v.iter()
+                    .map(|(sprime, p)| (self.state_mapping.get(sprime).unwrap(), sprime, p))
+                    .collect::<Vec<(&i32, &Vec<i32>, &f64)>>();
+                println!("[{}]:{:?}, {:?} => {:?}", state_idx, state, action, vprint);
+            }
         }
     }
 
     pub fn print_rewards(&self) {
-        for r in self.rewards.iter() {
-            println!("{:?}", r)
+        for state in self.states.iter() {
+            // get the state transition
+            let state_idx = self.state_mapping.get(&state.to_vec()).unwrap();
+            for action in self.actions.get(&state.to_vec()).unwrap().iter() {
+                let rbar = self.rewards.get(&(state.to_vec(), action.to_vec())).unwrap();
+                println!("[{}]:{:?}, {:?} => {:?}", state_idx, state, action, rbar);
+            }
         }
     }
 
@@ -164,6 +178,18 @@ impl MAMDP {
     pub fn print_action_mapping(&self) {
         for k in 0..self.action_map.len() {
             println!("{:?}", self.action_map.get(&(k as i32)).unwrap());
+        }
+    }
+
+    pub fn print_state_mapping(&self) {
+        for state in self.states.iter() {
+            println!("{:?} -> {:?}", state, self.state_mapping.get(&state.to_vec()).unwrap());
+        }
+    }
+
+    pub fn print_state_test(&self, state_idx: usize) {
+        for t in self.transitions.iter().filter(|((s, _a), _v)| s.to_vec() == self.states[state_idx]) {
+            println!("{:?}", t);
         }
     }
 }
@@ -224,8 +250,8 @@ fn mamdp_bfs(
                     visited.insert(s.to_vec());
                     stack.push_back(s.to_vec());
                     mamdp.insert_state(&s[..]);
-                    mamdp.insert_transition((s.to_vec(), *p), &newstate[..], comb);
                 }
+                mamdp.insert_transition((s.to_vec(), *p), &newstate[..], comb);
             }
         }
     }
@@ -251,13 +277,17 @@ pub fn convert_to_multobj_mdp(
     for state in model.states.iter() {
         let state_actions = compute_input_actions(state, team, tasks, n, m);
         for comb in state_actions.iter() {
-            let vec_act_idx = *model.reverse_action_map
-                .get(&comb.to_vec())
-                .unwrap();
-            action_space.insert(vec_act_idx);
             let state_idx = *model.state_mapping.get(&state.to_vec()).unwrap();
+            let vec_act_idx = *model.reverse_action_map
+                        .get(&comb.to_vec())
+                        .unwrap();
+            action_space.insert(vec_act_idx);
             match model.transitions.get(&(state.to_vec(), comb.to_vec())) {
                 Some(x) => {
+                    condensed_model.insert_available_action(
+                        *model.state_mapping.get(&state.to_vec()).unwrap(), 
+                        vec_act_idx
+                    );
                     let sprime_idx_vec = x.iter()
                         .map(|(sprime, p)| (*model.state_mapping.get(sprime).unwrap(), *p))
                         .collect::<Vec<(i32, f64)>>();
@@ -269,9 +299,7 @@ pub fn convert_to_multobj_mdp(
                 Some(x) => {
                     condensed_model.rewards.insert((state_idx, vec_act_idx), x.to_vec());
                 }
-                None => { 
-
-                }
+                None => { }
             }
         }
     }

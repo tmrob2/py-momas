@@ -1,13 +1,15 @@
 """
-This script will consist of constructing a MAMDP model
+This script will import a simultaneouse task allocation and planning framework
+and solve the problem with a Team MDP model
 """
-import rust_motap
-from rust_motap import mamdp as mamdplib
 
-NUM_TASKS = 6
+import rust_motap
+from rust_motap import stapu as stapulib
+
+
+NUM_TASKS = 9
 NUM_AGENTS = 2
 
-# define a set of global action
 
 agent = rust_motap.Agent(0, list(range(5)), [1, 2])
 # for this experiment we just want some identical copies of the agents
@@ -63,47 +65,37 @@ team.print_initial_states()
 
 
 if __name__ == "__main__":
-    # start by determining the initial transitions of the state
-    # define agent 1
-    initial_state = mamdplib.construct_initial_state(mission, team)
-    print("Initial state: ", initial_state)
-    #rust_motap.find_neighbour_states(
-    #    initial_state, [0] * NUM_AGENTS, team, mission, NUM_AGENTS, NUM_TASKS
-    #)
-    # action_products = rust_motap.compute_input_actions(initial_state, team, mission, NUM_AGENTS, NUM_TASKS)
-    # Run a test over some transitions
-    #rust_motap.test_get_all_transitions(initial_state, team, mission, NUM_AGENTS, NUM_TASKS);
-    # Test a new state
-    # let the state be one of the transition states from the initial state 
-    # following a task allocation
-    #test_state = [0, 1, 1, 2, 0, 0, 1]
-    #rust_motap.test_get_all_transitions(test_state, team, mission, NUM_AGENTS, NUM_TASKS)
-    
-    # Build the MAMDP model
-    mamdp = mamdplib.build_model(initial_state, team, mission, NUM_AGENTS, NUM_TASKS)
-    
-    # If the following is true, then the MAMDP has a state in which all tasks
-    # are completed reachable from the initial state. 
 
-    # MAMDP model size
-    print("|P|, ", mamdp.get_number_states())
-    mamdp.print_model_attr()
-    #mamdp.print_state_mapping()
-    print(mamdp.states[70])
-    mamdp.print_state_test(70)
-    #mamdp.print_transitions()
-    #mamdp.print_rewards()
-    #mamdp.find_initial_transitions()
-    assert mamdplib.assert_done(mamdp, mission, NUM_AGENTS, NUM_TASKS) is True
-    # convert to a condensed MDP
-    #mamdp.print_action_mapping()
-    momdp = mamdplib.convert_to_multobj_mdp(mamdp, team, mission, NUM_AGENTS, NUM_TASKS)
+    # construct the initial state of the Team MDP model
+    initial_state = stapulib.construct_initial_state(mission, team, NUM_TASKS, 0) 
+    #initial_state.print_state()
+
+    # Test get the available actions for the initial state
+    actions = stapulib.get_available_actions(initial_state, team, mission, NUM_AGENTS, NUM_TASKS)
+    #new_states = []
+    #for action in actions:
+    #    action.print_action()
+    #    transitions = stapulib.transitions(initial_state, action, team, mission)
+    #    for (s, p) in transitions:
+    #        print(s.state_repr(), p)
+    #        new_states.append(s)
+    #
+    #print("finished initial test")
+    #for state in new_states:
+    #    state.print_state()
+    #    actions = stapulib.get_available_actions(state, team, mission, NUM_AGENTS, NUM_TASKS)
+    #    for action in actions:
+    #        action.print_action()
+
+    team_mdp = stapulib.build_model(initial_state, team, mission, NUM_AGENTS, NUM_TASKS);
+    #team_mdp.print_transitions()
+    #team_mdp.print_rewards()
+    momdp = stapulib.convert_to_multobj_mdp(team_mdp, team, mission, NUM_AGENTS, NUM_TASKS);
     #momdp.print_transitions()
-    ##momdp.print_available_actions()
-    target = [-30.] * NUM_AGENTS + [0.9] * NUM_TASKS
+    #momdp.print_rewards()
+    target = [-150.] * NUM_AGENTS + [0.90] * NUM_TASKS
     eps = 1e-5
     (mu, r) = rust_motap.multiobjective_scheduler_synthesis(
         eps, target, momdp, NUM_AGENTS, NUM_TASKS
     )
     momdp.print_model_size()
-    
